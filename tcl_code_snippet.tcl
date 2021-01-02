@@ -1,4 +1,4 @@
-#!/usr/bin/wish
+#!/usr/bin/env wish
 
 # @from:
 proc font_metric {cvs} {
@@ -274,26 +274,26 @@ proc plugin_line_getfield {canv objid coords field} {
 
 # @description: rename proc
 # @from:
-rename proc ::prof::_proc
-::prof::_proc proc {procname procargs procbody} {
-    set ns [uplevel namespace current]
-    # ns = ::
-    # ns = ::namespace
-    if {$ns == "::"} {
-        set ns ""
-    }
-    # ns = ""
-    # ns = ::namespace
-    if {[string range $procname 0 1] != "::"} {
-        set procname "${ns}::${procname}"
-    }
-    set res [::prof::_proc $procname $procargs $procbody]
-    if {![string match "::tcl::*" $procname]} {
-        trace add execution $procname enter ::prof::enter
-        trace add execution $procname leave ::prof::leave
-    }
-    return $res
-}
+#rename proc ::prof::_proc
+#::prof::_proc proc {procname procargs procbody} {
+#    set ns [uplevel namespace current]
+#    # ns = ::
+#    # ns = ::namespace
+#    if {$ns == "::"} {
+#        set ns ""
+#    }
+#    # ns = ""
+#    # ns = ::namespace
+#    if {[string range $procname 0 1] != "::"} {
+#        set procname "${ns}::${procname}"
+#    }
+#    set res [::prof::_proc $procname $procargs $procbody]
+#    if {![string match "::tcl::*" $procname]} {
+#        trace add execution $procname enter ::prof::enter
+#        trace add execution $procname leave ::prof::leave
+#    }
+#    return $res
+#}
 
 # @from:    layers.tcl
 proc layer_init {canv} {
@@ -608,7 +608,6 @@ proc layer_object_delete {canv layerid objid} {
 }
 
 
-
 proc layer_object_arrange {canv layerid objid relpos} {
     set objs [layer_objects $canv $layerid]
     set origpos [lsearch -exact $objs $objid]
@@ -624,5 +623,376 @@ proc layer_object_arrange {canv layerid objid relpos} {
     set objs [linsert $objs $nupos $objid]
     set layersInfo($canv-LAYERCHILDREN-$layerid) $objs
 }
+
+
+# @from:    TCLAscllTable
+#TclAscIITable是一款基于TCL语言的纯文本表格打印函数包，具有以下功能：
+#
+#    允许以行/列优先输入数据
+#    允许添加表格
+#    允许添加表头
+#    允许修改表格水平/垂直分割字符
+#    允许修改表格打印风格
+#PrintTable -Row $Row -Header $Header -Title "TableTitle"
+#.-------------------------.
+#|       TableTitle        |
+#|-------+-------+---------|
+#| aaaaa | index | comment |
+#|   1   |  one  |  0.01   |
+#|   1   |  one  |  0.01   |
+#|   1   |  one  |  0.01   |
+#|   1   |  one  |  0.01   |
+#'-------------------------'
+
+#PrintTable -Row $Row -Header $Header  -FirstLine 0 -LastLine 0 -VSplitChar " " -Title "Title" -TopChar = -HSplitChar = -Margin "" -TitleCenter 0
+#Title
+#===========================
+#  aaaaa   index   comment
+#    1      one     0.01
+#    1      one     0.01
+#    1      one     0.01
+#    1      one     0.01
+
+
+#set Row [list \
+#    [list 1 "one" "0.01"] \
+#    [list 1 "one" "0.01"] \
+#    [list 1 "one" "0.01"] \
+#    [list 1 "one" "0.01"] \
+#]
+proc GetRowList { RowORCol Matrix } {
+    if { [string equal $RowORCol Row] } {
+        for {set i 0} {$i < [llength $Matrix]} {incr i} {
+            lappend RowList [lindex $Matrix $i]
+            # RowList [list [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list 1 "one" "0.01"] ]
+        }
+    } elseif { [string equal $RowORCol Col] } {
+        # convert Col matrix to Row matrix
+        set iLen [llength [lindex $Matrix 0]]
+        set jLen [llength $Matrix]
+        for {set i 0} {$i < $iLen} {incr i} {
+            set Row ""
+            for {set j 0} {$j < $jLen} {incr j} {
+                lappend Row [lindex [lindex $Matrix $j] $i]
+            }
+            lappend RowList $Row
+        }
+    } else {
+        exit
+    }
+    return $RowList
+}
+
+proc GetColMaxLen { RowList ColNum Align } {
+    for {set i 0} {$i < $ColNum} {incr i} {
+        lappend ColMaxLen 0
+        # set ColNum 3
+        # set RowList [list [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list "*" "*" "*"]]
+        # set ColMaxLen {0 0 0}
+    }
+    foreach Row $RowList {
+        for {set i 0} {$i < $ColNum} {incr i} {
+            # set RowList [list [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list 1 "one" "0.01"] [list "title"]
+            # set AlignType [list "Center7" "Center7" "5.3f"]
+            set AlignType [lindex $Align $i]
+            if { [regexp {(\d+)?.(\d)f} $AlignType match int dec] } {
+                # 5.3f
+                set ColLen [expr $int + $dec +1]
+            } elseif { [regexp {(\d+)} $AlignType len] } {
+                # Center7
+                set ColLen $len
+            } else {
+                set ColLen 0
+            }
+            set StrLen [string length [lindex $Row $i]]
+            set ColLen [GetBigger $ColLen $StrLen]
+            if { $ColLen > [lindex $ColMaxLen $i] } {
+                lset ColMaxLen $i $ColLen
+            }
+        }
+    }
+    # set ColMaxLen {3 6 9}
+    return $ColMaxLen
+}
+
+proc GetSplitLine { BodyRow HChar VChar CChar } {
+    set SplitLine $BodyRow
+    set SplitLine [regsub -all "\[^$VChar\]" $SplitLine $HChar]
+    set SplitLine [regsub -all "\[$VChar\]"  $SplitLine $CChar]
+    set SplitLine [regsub -all "^.|.$"       $SplitLine $VChar]
+    # set SplitLine |---------+----------+--------|
+    return $SplitLine
+}
+
+proc GetBodyRow { ColList ColMaxLen AlignList LPadding RPadding VChar } {
+    # set Header [list "*" "*" "*"]
+    # set AlignType [list "Center7" "Center7" "5.3f"]
+    set ColNum [llength $ColList]
+    set BodyRow $VChar
+    for {set i 0} {$i < $ColNum} {incr i} {
+        set FormatCell  [AlignString  \
+            [lindex $ColList   $i] \
+            [lindex $ColMaxLen $i] \
+            [lindex $AlignList $i] \
+        ]
+        # set LPadding <
+        # set RPadding >
+        # set VChar |
+        append BodyRow "$LPadding$FormatCell$RPadding$VChar"
+    }
+    return $BodyRow
+    # set BodyRow | aaaaa | index | comment |
+    #             |   1   |  one  |  0.01   |
+    #             |   1   |  one  |  0.01   |
+    #             |   1   |  one  |  0.01   |
+    #             |   1   |  one  |  0.01   |
+}
+
+proc GetCenterFormat { String Length } {
+    set m [string length $String]
+    set t [expr $Length - $m]
+    set l [expr $t / 2]
+    set r [expr $l + ($t % 2)]
+    set result "%-${l}s%${m}s%${r}s"
+    return $result
+    # set result "%-0s%7s%0s"
+}
+
+proc parse_proc_arguments { procArgs optsRef } {
+    upvar $optsRef opts
+    foreach arg $procArgs {
+        # judge whether option predix is - or not
+        if { [string index $arg 0] == "-" } {
+            # set opts(-Title) default_val
+            set curArg $arg
+            set opts($curArg) 1
+        } else {
+            if { [info exists curArg] } {
+                # set opts(-Title) current_arg
+                set opts($curArg) $arg
+                unset curArg
+            }
+        }
+    }
+    return
+}
+
+proc GetLine { Length Char } {
+    # set Char -
+    set Line ""
+    for {set i 0 } { $i < $Length} {incr i} {
+        append Line $Char
+    }
+    return $Line
+}
+
+proc GetBigger {a b} {
+    if { $a > $b } {
+        return $a
+    } else {
+        return $b
+    }
+}
+
+proc AlignString { String Length Type } {
+    # set String aaaaaa
+    # set ColMaxLen 3
+    # set type "Center7"
+    if { [regexp {(\d+)?.(\d)f} $Type Pattern int dec] } {
+        if { [regexp {^\d+\.\d+$} $String]} {
+            # 5.3f
+            set len [expr $int + $dec +1]
+            set Length [GetBigger $Length $len]
+            return [format "%${Length}s" [format "%$Pattern" $String]]
+        } else {
+            return [format "%${Length}s" $String]
+        }
+    } elseif { [regexp {Left(\d+)?} $Type match len] } {
+        # Left7
+        set Length [GetBigger $Length $len]
+        return [format "%-${Length}s" $String]
+    } elseif { [regexp {Right(\d+)?} $Type match len] } {
+        # Right8
+        set Length [GetBigger $Length $len]
+        return [format "%${Length}s" $String]
+    } else { ;# default AlignType : center
+        return [format [GetCenterFormat $String $Length] "" $String ""]
+    }
+}
+
+proc PrintTable { args } {
+    # default option
+    set options(-Title)         ""
+    set options(-AlignType)     ""
+    set options(-Header)        ""
+    set options(-HSplitChar)    -
+    set options(-VSplitChar)    |
+    set options(-CrossChar)     +
+    set options(-LPadding)      " "
+    set options(-RPadding)      " "
+    set options(-Margin)        \t
+    set options(-TitleLine)     1
+    set options(-HeaderLine)    1
+    set options(-BlankLine)     1
+    set options(-FirstLine)     1
+    set options(-LastLine)      1
+    set options(-SplitLine)     0
+    set options(-Debug)         0
+
+    parse_proc_arguments $args options
+
+    set Title           $options(-Title)
+    set Header          $options(-Header)
+    set HChar           $options(-HSplitChar)
+    set VChar           $options(-VSplitChar)
+    set CChar           $options(-CrossChar)
+    set LPadding        $options(-LPadding)
+    set RPadding        $options(-RPadding)
+    set Margin          $options(-Margin)
+    set Align           $options(-AlignType)
+    set Debug           $options(-Debug)
+    set PrintFisrtLine  $options(-FirstLine)
+    set PrintLastLine   $options(-LastLine)
+    set PrintSplitLine  $options(-SplitLine)
+    set PrintBlankLine  $options(-BlankLine)
+    set PrintTitleLine  $options(-TitleLine)
+    set PrintHeaderLine $options(-HeaderLine)
+
+    #Get RowList
+    # option_list {-Title -Header -Debug ...}
+    set option_list [array name options]
+    # if debug is true, puts array so as to easily check
+    if { $Debug } { puts [array get options] }
+
+    #set Row [list \
+    #    [list 1 "one" "0.01"] \
+    #    [list 1 "one" "0.01"] \
+    #    [list 1 "one" "0.01"] \
+    #    [list 1 "one" "0.01"] \
+    #]
+    if { [regexp {\-Row} $option_list] } {
+        set RowList [GetRowList Row $options(-Row)]
+        # set RowList {1 one 0.01} {1 one 0.01} {1 one 0.01} {1 one 0.01}
+    } elseif { [regexp {\-Col} $option_list] } {
+        set RowList [GetRowList Col $options(-Col)]
+        # convert Col matrix to Row matrix
+    } else {
+        exit
+    }
+
+    set ColNum [llength [lindex $RowList 0]]
+
+    # -VSplitChar " "
+    if {[llength $VChar]  == 0} {
+        set CChar $HChar
+        set PrintFisrtLine 0
+        set PrintLastLine  0
+    }
+    if {[llength $Header] == 0} {
+        set PrintHeaderLine 0
+        set Header [lrepeat $ColNum "*"]
+        # set Header [list "*" "*" "*"]
+    }
+    # set Header {aaaaa index comment}
+    if {[llength $Title]  == 0} {
+        set PrintTitleLine 0
+    }
+
+    #Get Each Col Max Length
+    set AllRow          [concat $RowList [list $Header]]
+    # set AllRow {1 one 0.01} {1 one 0.01} {1 one 0.01} {1 one 0.01} {aaaaa index comment}
+    set ColMaxLen       [GetColMaxLen $AllRow $ColNum $Align]
+    # set ColMaxLen {5 5 7}
+
+    # set LPadding " "
+    # set RPadding " "
+    # set VChar |
+    set HeaderLine      [GetBodyRow $Header $ColMaxLen $Align $LPadding $RPadding $VChar]
+    # set HeaderLine | aaaa | index | comment |
+    set RowLen          [string length $HeaderLine]
+    set HLine           [GetLine $RowLen $HChar]
+    # set HLine ----------------------------
+
+    if {$PrintFisrtLine}    {
+        set TitleLine   [format [GetCenterFormat $Title $RowLen] $VChar $Title $VChar]
+    } else {
+        set TitleLine   [format [GetCenterFormat $Title $RowLen] " " $Title " "]
+        # set TitleLine "           "
+    }
+    set SplitLine       [GetSplitLine $HeaderLine $HChar $VChar $CChar]
+    # set SplitLine |---------+--------+-------|
+    set FirstLine       [regsub -all "^.|.$" $HLine "." ]
+    # set FirstLine .--------------------------.
+    set LastLine        [regsub -all "^.|.$" $HLine "'" ]
+    # set LastLine '--------------------------'
+
+    #Get Print Buffer
+    #
+    #Print    Print    Print
+    #First    Last     Title
+    #  0        0        0
+    #  0        0        1             title + first*
+    #  0        1        0                             last
+    #  0        1        1             title + first*+ last
+    #  1        0        0     first
+    #  1        0        1     first + title + split
+    #  1        1        0     first                 + last
+    #  1        1        1     first + title + split + last
+    set PrintBuffer ""
+    if {$PrintBlankLine}        {lappend PrintBuffer ""}
+    if {$PrintFisrtLine}        {lappend PrintBuffer $FirstLine}
+    if {$PrintTitleLine}        {lappend PrintBuffer $TitleLine
+        if {!$PrintFisrtLine}   {lappend PrintBuffer $FirstLine
+        } else {                 lappend PrintBuffer $SplitLine}}
+    if {$PrintHeaderLine}       {lappend PrintBuffer $HeaderLine}
+
+    foreach Row $RowList {
+        if {$PrintSplitLine}    {lappend PrintBuffer $SplitLine}
+        # set SplitLine |---------+--------+-------|
+        # | aaaaa | index | comment |
+                                 lappend PrintBuffer [GetBodyRow $Row $ColMaxLen $Align $LPadding $RPadding $VChar] }
+    if {$PrintLastLine}         {lappend PrintBuffer $LastLine}
+    if {$PrintBlankLine}        {lappend PrintBuffer ""}
+    # set PrintBuffer {} {| aaaaa | index | comment |} {|   1    |  one  |  0.01   |} {}
+
+    #Print Table
+    foreach line $PrintBuffer {
+        puts $Margin$line
+        # set Margin "\t"
+    }
+}
+
+set AlignType [list "Center7" "Center7" "5.3f"] 
+set Row [list \
+    [list 1 "one" "0.01"] \
+    [list 1 "one" "0.01"] \
+    [list 1 "one" "0.01"] \
+    [list 1 "one" "0.01"] \
+]
+
+set Header [list "aaaaa" "index" "comment" ]
+
+#PrintTable  -Row $Row  \
+            -Header $Header  \
+            -AlignType $AlignType \
+            -VSplitChar " " \
+            -HeaderLine 0 \
+            -TitleLine 0 \
+            -BlankLine 
+
+
+#PrintTable  -VSplitChar " " \
+            -AlignType $AlignType \
+            -LPadding < \
+            -RPadding > \
+            -Row $Row  
+
+#PrintTable  -Row $Row   -Title "Title" -FirstLine 1 -LastLine 1 -TitleLine 1
+# @example:
+#PrintTable -Row $Row -Header $Header -Title "TableTitle"
+#PrintTable -Row $Row -Header $Header -Title "TableTitle" -FirstLine 0
+#PrintTable -Row $Row -Header $Header -Title "TableTitle" -LastLine 0
+#PrintTable -Row $Row -Header $Header -Title "TableTitle" -SplitLine
+#PrintTable -Row $Row -Header $Header  -FirstLine 0 -LastLine 0
 
 # vim: set ts=4 sw=4 nowrap expandtab: settings
